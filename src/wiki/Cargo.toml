@@ -1,0 +1,25 @@
+[package]
+name = "wiki"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bzip2 = "0.4.4"
+fst = {version = "0.4.7", features = ["levenshtein"]}
+quick-xml = {version = "0.31.0", features = ["serialize", "async-tokio"]}
+rayon = "1.8.0"
+rmp-serde = "1.1.2"
+serde = {version = "1.0.193", features = ["derive"]}
+serde_bytes = "0.11.13"
+serde_cbor = "0.11.2"
+serde_json = "1.0.108"
+
+[profile.release]
+opt-level = 3
+debug = false
+
+[profile.test]
+opt-level = 3
+debug = false

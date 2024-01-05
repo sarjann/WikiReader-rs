@@ -1,0 +1,12 @@
+[package]
+name = "wiki-reader"
+version = "0.1.0"
+authors = ["Sarjan Narwan <sarjan@narwan.dev>"]
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+crossterm = "0.27.0"
+fst = "0.4.7"
+ratatui = "0.24.0"
+wiki = { path = "./src/wiki" }

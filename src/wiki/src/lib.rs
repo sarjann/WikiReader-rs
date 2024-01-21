@@ -1,20 +1,18 @@
-use bzip2::read::MultiBzDecoder;
+// Standard Lib
 use std::fmt::Debug;
 use std::fs::File;
-use std::io;
 use std::io::prelude::*;
-use std::io::{BufReader, SeekFrom};
-use std::path::Path;
+use std::io::{BufReader, BufWriter, SeekFrom};
+use std::path::{Path, PathBuf};
 
-//
+// Third Party
+use bzip2::read::MultiBzDecoder;
 use fst::automaton::Levenshtein;
 use fst::{IntoStreamer, Map, MapBuilder, Streamer};
 use quick_xml;
 use rayon::prelude::*;
-use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json;
-//
 
 fn create_directory_if_not_exists(path: &str) {
     let path = path.replace("~", std::env::var("HOME").unwrap().as_str());
@@ -87,11 +85,12 @@ pub struct RevisionPage {
 #[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page {
     pub title: String,
-    pub ns: u32,
     pub id: u32,
     pub block_id: Option<usize>,
-    pub redirect: Option<Redirect>,
-    pub revision: Option<RevisionPage>,
+    // Shouldn't be needed for indexing so saving memory
+    // pub ns: u32,
+    // pub redirect: Option<Redirect>,
+    // pub revision: Option<RevisionPage>,
 }
 
 #[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -141,10 +140,16 @@ pub fn create_fst(pages: &Vec<Page>, output_path: &str) -> Option<Map<Vec<u8>>> 
         .collect::<Vec<_>>();
 
     key_val_tuple.sort_by(|a, b| a.0.cmp(b.0));
-    let mut wtr = io::BufWriter::new(File::create(output_path).unwrap());
+    let mut wtr = BufWriter::new(File::create(output_path).unwrap());
     let mut build = MapBuilder::new(&mut wtr).unwrap();
 
+    let mut set = std::collections::HashSet::new();
+
     for (key, value) in key_val_tuple.iter() {
+        if set.contains(key) {
+            continue;
+        }
+        set.insert(key);
         build.insert(key, *value).unwrap();
     }
 
@@ -244,7 +249,6 @@ pub fn get_detailed_page(
 ) -> Option<DetailedPage> {
     let pages_block = use_bzip_block_n_detailed(&table, path, block_id as usize);
 
-    // panic!("Block ID: {}, Page ID: {}", block_id, page_id);
     let mut pages = pages_block.unwrap();
 
     let mut selected_id: Option<usize> = None;
@@ -259,18 +263,14 @@ pub fn get_detailed_page(
     };
 }
 
-fn indexing_bzip_blocks(
-    table: &BZipTable,
-    path: &Path,
-    output_path: &str,
-) -> std::io::Result<Vec<Page>> {
+fn indexing_bzip_blocks(table: &BZipTable, path: &Path) -> std::io::Result<Vec<Page>> {
     let block_count = table.length;
 
     println!("Block Count: {}", block_count);
 
     let (sender, receiver) = std::sync::mpsc::channel();
 
-    println!("got to the block bit");
+    println!("Indexing pages in blocks");
     (1..block_count - 1)
         .into_par_iter()
         .for_each_with(sender, |s, i| {
@@ -293,12 +293,7 @@ fn indexing_bzip_blocks(
         .flatten()
         .collect();
 
-    println!("pages_len: {}", pages.len());
-
-    // Write pages
-    let _ = serde_json::ser::to_writer(File::create(output_path).unwrap(), &pages);
-
-    println!("pages_len: {}", pages.len());
+    println!("Page Count: {}", pages.len());
     return Ok(pages);
 }
 
@@ -351,80 +346,41 @@ pub fn create_bz_table(
     return Ok(table);
 }
 
+pub fn initial_indexing(input_bz_path: PathBuf, meta_path: PathBuf) -> std::io::Result<()> {
+    // Create meta directory if doesn't exist
+    create_directory_if_not_exists(meta_path.to_str().unwrap());
+
+    // Index bzip blocks
+    let f = File::open(&input_bz_path.to_str().unwrap()).expect("No bzip file found");
+
+    println!("Indexing bzip blocks");
+    let mut reader = BufReader::new(f);
+
+    let output_bzip_path = meta_path.join("table.json");
+    let table: BZipTable =
+        create_bz_table(&mut reader, output_bzip_path.to_str().unwrap()).unwrap();
+    for i in 0..table.length {
+        println!("{}: {:?}", i, table.blocks[i]);
+    }
+    //
+
+    let table: BZipTable =
+        serde_json::de::from_reader(File::open(meta_path.join("table.json")).unwrap()).unwrap();
+
+    println!("Indeing pages in blocks");
+
+    // Might be a bit memory hungry
+    let pages: Vec<Page> = indexing_bzip_blocks(&table, &input_bz_path).unwrap();
+
+    let output_fst = meta_path.join("map.fst");
+    let _map = create_fst(&pages, &output_fst.to_str().unwrap()).unwrap();
+    return Ok(());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn thing() {
-        let base_path = Path::new("/home/s/Documents/wiki/simple/");
-        // let base_path = Path::new("/home/s/Documents/wiki/bigger/");
-        // let input_path =
-        //     "/home/s/Documents/wiki/simple/meta/simplewiki-20230820-pages-articles-multistream.xml.bz2";
-
-        let input_bz2_path = base_path.join("base.bz2");
-
-        //// Index
-        // let f = File::open(&input_bz2_path).unwrap();
-        //
-        // let mut reader = BufReader::new(f);
-        //
-        // let output_bzip_path = base_path.join("meta/bzip_table.json");
-        // let table: BZipTable =
-        //     create_bz_table(&mut reader, output_bzip_path.to_str().unwrap()).unwrap();
-        // for i in 0..table.length {
-        //     println!("{}: {:?}", i, table.blocks[i]);
-        // }
-        ////
-
-        let table: BZipTable = serde_json::de::from_reader(
-            File::open(base_path.join("meta/bzip_table.json")).unwrap(),
-        )
-        .unwrap();
-
-        println!("-bzip use_block");
-
-        // let f = File::open(&input_bz2_path).unwrap();
-        // let mut reader = BufReader::new(f);
-
-        let index_path = base_path.join("meta/indexed");
-        // let pages: Vec<Page> =
-        //     indexing_bzip_blocks(&table, &input_bz2_path, index_path.to_str().unwrap()).unwrap();
-
-        let pages: Vec<Page> = serde_json::from_reader(File::open(index_path).unwrap()).unwrap();
-        println!("Page Len {}", pages.len());
-
-        let output_fst = base_path.join("meta/map.fst");
-        let map = create_fst(&pages, &output_fst.to_str().unwrap()).unwrap();
-        // let fst = open_fst("/home/s/Documents/wiki/meta/big.fst").unwrap();
-    }
-
-    fn thing2() {
-        let base_path = Path::new("/home/s/Documents/wiki/simple/");
-        let input_bz2_path = base_path.join("base.bz2");
-
-        let table: BZipTable = serde_json::de::from_reader(
-            File::open(base_path.join("meta/bzip_table.json")).unwrap(),
-        )
-        .unwrap();
-
-        println!("-bzip use_block");
-        let page = get_detailed_page(&table, 47955, 228, &input_bz2_path).unwrap();
-        println!("Page: {:?}", page);
-    }
-
     #[test]
-    fn other() {
-        thing2();
-    }
-
-    // #[test]
-    // fn load_file() {
-    //     println!("test load");
-    //     load();
-    // }
-
-    // #[test]
-    // fn run() {
-    //     debugging();
-    // }
+    fn placeholder() {}
 }

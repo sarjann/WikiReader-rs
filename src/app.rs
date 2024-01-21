@@ -1,6 +1,8 @@
+use crossterm::event::KeyCode;
 use fst::Map;
 use ratatui::widgets::ListState;
-use crossterm::event::KeyCode;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::error;
 use std::fmt::Display;
 use std::path::Path;
@@ -35,6 +37,12 @@ impl Display for State {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WikiConfig {
+    pub wiki_bzip_path: String,
+    pub meta_directory: String,
+}
+
 #[derive(Debug)]
 pub struct App {
     pub running: bool,
@@ -57,7 +65,48 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let base_path = Path::new("/home/s/Documents/wiki/simple/");
+        // Open config
+        let _config_path = "~/.config/wikiterm/config.json";
+        let config_path = _config_path.replace("~", std::env::var("HOME").unwrap().as_str());
+
+        let config = serde_json::from_str::<WikiConfig>(
+            std::fs::read_to_string(config_path).unwrap().as_str(),
+        )
+        .expect(
+            "Could not parse config file or doesn't exist at
+            ~/.config/wikiterm/config.json",
+        );
+
+        let _bzpath = &config
+            .wiki_bzip_path
+            .replace("~", std::env::var("HOME").unwrap().as_str());
+        let bzpath = Path::new(_bzpath);
+
+        let _meta_path = &config
+            .meta_directory
+            .replace("~", std::env::var("HOME").unwrap().as_str());
+        let meta_path = Path::new(_meta_path);
+
+        let table_path = meta_path.join("table.json");
+        let fst_path = meta_path.join("map.fst");
+        if !fst_path.exists() {
+            println!(
+                "Could not find map.fst in meta directory,
+                running indexing"
+            );
+            match wiki::initial_indexing(
+                bzpath.to_str().unwrap().into(),
+                meta_path.to_str().unwrap().into(),
+            ) {
+                Ok(_) => {}
+                Err(e) => {
+                    panic!("Failed to index: {}", e);
+                }
+            }
+        } else {
+            println!("Found map.fst in meta directory, assuming indexed");
+        }
+
         return Self {
             running: true,
             state: State::Normal,
@@ -69,10 +118,9 @@ impl Default for App {
             list_state: ListState::default(),
             scroll: 0,
             // Internals
-            fst: wiki::open_fst(base_path.join("meta/map.fst").to_str().unwrap()).unwrap(),
-            base_path: base_path.join("base.bz2"),
-            bztable: wiki::open_bz_table(base_path.join("meta/bzip_table.json").to_str().unwrap())
-                .unwrap(),
+            fst: wiki::open_fst(fst_path.to_str().unwrap()).unwrap(),
+            base_path: bzpath.to_path_buf(),
+            bztable: wiki::open_bz_table(table_path.to_str().unwrap()).unwrap(),
             last_key: None,
         };
     }

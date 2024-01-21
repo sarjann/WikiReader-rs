@@ -128,6 +128,13 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             KeyCode::Up | KeyCode::Char('k') => {
                 app.up();
             }
+            // gg (go to top)
+            KeyCode::Char('g') => match app.last_key {
+                Some(KeyCode::Char('g')) => {
+                    app.scroll = 0;
+                }
+                _ => {}
+            },
             _ => {}
         },
         _ => match key_event.code {
@@ -137,6 +144,6 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             _ => {}
         },
     }
-
+    app.last_key = Some(key_event.code);
     Ok(())
 }

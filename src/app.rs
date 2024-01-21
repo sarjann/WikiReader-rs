@@ -1,5 +1,6 @@
 use fst::Map;
 use ratatui::widgets::ListState;
+use crossterm::event::KeyCode;
 use std::error;
 use std::fmt::Display;
 use std::path::Path;
@@ -49,6 +50,9 @@ pub struct App {
     pub fst: Map<Vec<u8>>,
     pub base_path: std::path::PathBuf,
     pub bztable: wiki::BZipTable,
+
+    // Crossterm
+    pub last_key: Option<KeyCode>,
 }
 
 impl Default for App {
@@ -69,6 +73,7 @@ impl Default for App {
             base_path: base_path.join("base.bz2"),
             bztable: wiki::open_bz_table(base_path.join("meta/bzip_table.json").to_str().unwrap())
                 .unwrap(),
+            last_key: None,
         };
     }
 }

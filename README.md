@@ -47,7 +47,7 @@ up, down
 :q to quit or Ctrl-c
 
 Esc to exit back to normal mode
-Aswell as / to search
+/ to search
 ```
 
 ## Limitations / Room for improvement
@@ -56,7 +56,7 @@ perfect, e.g.
 
 * Search isn't super great right now, will need to be improved
 * Not currently parsing wiki text so no formatting on the output
-* Some results simply 'redirect' you to other pages (with no redirect logic
+* Some results simply 'specify redirect' (with no redirect logic)
 
 ## Contributing
 

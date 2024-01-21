@@ -33,6 +33,9 @@ downloaded. It's expected that this is a multistream version.
 
 https://meta.wikimedia.org/wiki/Data_dump_torrents
 
+Note that larger dumps will take a lot longer to index (but this only needs
+to be done once).
+
 The meta_directory is the place you want any indexing / file produced by this
 project to go.
 

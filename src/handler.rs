@@ -137,12 +137,12 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             },
             _ => {}
         },
-        _ => match key_event.code {
-            KeyCode::Esc => {
-                app.set_state(State::Normal);
-            }
-            _ => {}
-        },
+        // _ => match key_event.code {
+        //     KeyCode::Esc => {
+        //         app.set_state(State::Normal);
+        //     }
+        //     _ => {}
+        // },
     }
     app.last_key = Some(key_event.code);
     Ok(())

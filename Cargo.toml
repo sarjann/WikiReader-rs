@@ -9,6 +9,6 @@ edition = "2021"
 crossterm = "0.27.0"
 fst = "0.4.7"
 ratatui = "0.24.0"
-wiki = { path = "./src/wiki" }
-serde = {version = "1.0.193", features = ["derive"]}
+wiki = { version = "0.1.0", path = "./src/wiki" }
+serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"

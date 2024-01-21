@@ -5,6 +5,14 @@ allow you to quickly search through an offline copy of wikipedia.
 
 ## Installation / Setup
 
+This can be installed through crates.io
+
+```bash
+cargo install wiki_reader
+# To start (Please set the config as below first)
+wiki_reader
+```
+
 This app expects a config file to be present at
 `~/.config/wikiterm/config.json`
 
@@ -23,7 +31,7 @@ already exist.
 The `wiki_bzip_path` is the path to the bzip2 (xml) archive file that is
 downloaded. It's expected that this is a multistream version.
 
-'https://dumps.wikimedia.org/mirrors.html`
+https://dumps.wikimedia.org/mirrors.html
 
 The meta_directory is the place you want any indexing / file produced by this
 project to go.
@@ -44,11 +52,11 @@ Aswell as / to search
 
 ## Limitations / Room for improvement
 This is currently a work in progress so many features will be missing / not
-perfect.
+perfect, e.g.
 
-[] Search isn't super great right now, will need to be improved
-[] Not currently parsing wiki text so no formatting on the output
-[] Some results simply 'redirect' you to other pages (with no redirect logic
+* Search isn't super great right now, will need to be improved
+* Not currently parsing wiki text so no formatting on the output
+* Some results simply 'redirect' you to other pages (with no redirect logic
 
 ## Contributing
 

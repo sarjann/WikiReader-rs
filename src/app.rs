@@ -17,6 +17,7 @@ pub enum State {
     Browse,
     Read,
     Normal,
+    Help,
 }
 
 #[derive(Debug)]
@@ -33,6 +34,7 @@ impl Display for State {
             State::Read => write!(f, "Reading Mode"),
             State::Normal => write!(f, "Normal Mode"),
             State::Command => write!(f, "Command Mode"),
+            State::Help => write!(f, "Help Mode"),
         }
     }
 }
@@ -41,6 +43,7 @@ impl Display for State {
 pub struct WikiConfig {
     pub wiki_bzip_path: String,
     pub meta_directory: String,
+    pub search_distance: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -54,10 +57,15 @@ pub struct App {
     pub search_results: Vec<SearchElement<u64>>,
     pub list_state: ListState,
     pub scroll: u16,
+    pub bottom_text: String,
+
     // Internals
     pub fst: Map<Vec<u8>>,
     pub base_path: std::path::PathBuf,
     pub bztable: wiki_loader::BZipTable,
+
+    // Config
+    pub search_distance: u32,
 
     // Crossterm
     pub last_key: Option<KeyCode>,
@@ -107,6 +115,8 @@ impl Default for App {
             println!("Found map.fst in meta directory, assuming indexed");
         }
 
+        let search_distance = config.search_distance.unwrap_or(1);
+
         return Self {
             running: true,
             state: State::Normal,
@@ -117,10 +127,16 @@ impl Default for App {
             search_results: Vec::new(),
             list_state: ListState::default(),
             scroll: 0,
+            bottom_text: String::new(),
             // Internals
             fst: wiki_loader::open_fst(fst_path.to_str().unwrap()).unwrap(),
             base_path: bzpath.to_path_buf(),
             bztable: wiki_loader::open_bz_table(table_path.to_str().unwrap()).unwrap(),
+
+            // Config
+            search_distance,
+
+            // Crossterm
             last_key: None,
         };
     }
@@ -140,6 +156,18 @@ impl App {
     pub fn execute_command(&mut self) {
         match self.command.as_str() {
             ":q" => self.quit(),
+            ":help" => self.state = State::Help,
+            ":meta" => {
+                let page_count = self.fst.len();
+                let block_count = self.bztable.length;
+                self.bottom_text = format!("Page count: {page_count}\nBlock count: {block_count}");
+            }
+            ":info" => {
+                if self.page.is_some() {
+                    let page = self.page.as_ref().unwrap();
+                    self.bottom_text = format!("{}", page);
+                }
+            }
             _ => {}
         }
         self.command.clear();
@@ -150,7 +178,8 @@ impl App {
     }
 
     pub fn search(&mut self) {
-        let out_search = wiki_loader::search(&self.fst, &self.search).unwrap();
+        let out_search =
+            wiki_loader::search(&self.fst, &self.search, Some(self.search_distance)).unwrap();
         self.search_results = Vec::new();
         for (key, value) in out_search.iter() {
             self.search_results.push(SearchElement::<u64> {
@@ -170,9 +199,26 @@ impl App {
         // Extract page_id and block_id
         let page_id = val & 0xffffffff;
         let block_id = val >> 32;
-        self.page = wiki_loader::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
+        self.page =
+            wiki_loader::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
 
         if self.page.is_some() {
+            if self.page.as_ref().unwrap().redirect.is_some() {
+                let redirect = self.page.as_ref().unwrap().redirect.as_ref().unwrap();
+                let val = self.fst.get(&redirect.title).unwrap();
+
+                // Extract page_id and block_id
+                let page_id = val & 0xffffffff;
+                let block_id = val >> 32;
+
+                self.bottom_text = format!("Redirecting to {}", &redirect.title);
+                self.page = wiki_loader::get_detailed_page(
+                    &self.bztable,
+                    page_id,
+                    block_id,
+                    &self.base_path,
+                );
+            }
             self.state = State::Read;
             self.scroll = 0;
         }
@@ -237,4 +283,13 @@ impl App {
     pub fn left(&mut self) {}
 
     pub fn right(&mut self) {}
+
+    pub fn before_key_event(&mut self, _key_event: &crossterm::event::KeyEvent) {
+        self.bottom_text = String::new();
+    }
+
+    pub fn after_key_event(&mut self, key_event: &crossterm::event::KeyEvent) {
+        self.last_key = Some(key_event.code);
+    }
+
 }

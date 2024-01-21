@@ -1,8 +1,8 @@
 use ratatui::{
     layout::Alignment,
-    prelude::{Constraint, Direction, Layout},
+    prelude::{Constraint, Direction, Layout, Span},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 
@@ -39,11 +39,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     let bottom_layout = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(10),
-            Constraint::Percentage(80),
-            Constraint::Percentage(10),
-        ])
+        .constraints([Constraint::Percentage(10), Constraint::Percentage(90)])
         .split(main_layout[2]);
 
     // Top
@@ -60,6 +56,25 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .alignment(Alignment::Left),
         top_layout[1],
     );
+
+    match app.state {
+        State::Normal => {
+            let help_title =
+                Span::styled("Help (?)", Style::default().add_modifier(Modifier::BOLD));
+            frame.render_widget(
+                Paragraph::new(help_title)
+                    .block(Block::new().borders(Borders::ALL))
+                    .alignment(Alignment::Left),
+                top_layout[2],
+            )
+        }
+        _ => frame.render_widget(
+            Paragraph::new("")
+                .block(Block::new().borders(Borders::ALL))
+                .alignment(Alignment::Left),
+            top_layout[2],
+        ),
+    }
 
     match app.state {
         State::Read => {
@@ -91,6 +106,30 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 middle_layout[0],
             )
         }
+        State::Help => {
+            let help = Paragraph::new(
+                "
+                / - Search
+                j or ↓ - Down
+                k or ↑ - Up
+                gg - Top
+                G - Bottom (Supported in some situations)
+                Enter - Select
+                Esc - Get back to normal mode
+                ? - Help
+                Ctrl+C - Quit
+                : - Command Mode
+
+                -- Command Mode --
+                :q - Quit
+                ",
+            );
+            frame.render_widget(
+                help.block(Block::default().borders(Borders::ALL))
+                    .alignment(Alignment::Left),
+                middle_layout[0],
+            )
+        }
         _ => {
             let list = List::new(
                 app.search_results
@@ -113,5 +152,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .block(Block::new().borders(Borders::ALL))
             .alignment(Alignment::Left),
         bottom_layout[0],
+    );
+
+    frame.render_widget(
+        Paragraph::new(format!("{}", app.bottom_text))
+            .wrap(Wrap { trim: true })
+            .block(Block::new().borders(Borders::ALL))
+            .alignment(Alignment::Left),
+        bottom_layout[1],
     );
 }

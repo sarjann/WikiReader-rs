@@ -20,7 +20,10 @@ With the following format:
 ```json
 {
     "wiki_bzip_path": "~/Documents/wiki/simple/base.bz2",
-    "meta_directory": "~/Documents/wiki/simple/meta"
+    "meta_directory": "~/Documents/wiki/simple/meta",
+
+    // Optional
+    "search_distance": 1
 }
 ```
 
@@ -39,6 +42,9 @@ to be done once).
 The meta_directory is the place you want any indexing / file produced by this
 project to go.
 
+The field search_distance (default value of 1) is used to specify how far words
+from what you type can be to show up in search results.
+
 ## Usage
 
 You should be able to navigate with (currently a subset of vim bindings)
@@ -52,6 +58,8 @@ up, down
 Esc to exit back to normal mode
 / to search
 ```
+These are some basic bindings, in order to get the rest, use ?.
+
 
 ## Limitations / Room for improvement
 This is currently a work in progress so many features will be missing / not
@@ -59,7 +67,6 @@ perfect, e.g.
 
 * Search isn't super great right now, will need to be improved
 * Not currently parsing wiki text so no formatting on the output
-* Some results simply 'specify redirect' (with no redirect logic)
 
 ## Contributing
 

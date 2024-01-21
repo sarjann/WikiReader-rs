@@ -1,5 +1,5 @@
 // Standard Lib
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter, SeekFrom};
@@ -103,6 +103,17 @@ pub struct DetailedPage {
     pub revision: Option<RevisionDetailedPage>,
 }
 
+impl Display for DetailedPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut out = format!("Title:{},ns:{},id:{}", self.title, self.ns, self.id);
+        out = match &self.redirect {
+            Some(redirect) => format!("{},redirect:{}", out, redirect.title),
+            None => out,
+        };
+        return write!(f, "{}", out);
+    }
+}
+
 trait PageItem {}
 impl PageItem for Page {}
 impl PageItem for DetailedPage {}
@@ -158,8 +169,13 @@ pub fn create_fst(pages: &Vec<Page>, output_path: &str) -> Option<Map<Vec<u8>>> 
     return Some(map);
 }
 
-pub fn search(map: &Map<Vec<u8>>, query: &str) -> std::io::Result<Vec<(String, u64)>> {
-    let lev = Levenshtein::new(query, 2).unwrap();
+pub fn search(
+    map: &Map<Vec<u8>>,
+    query: &str,
+    search_distance: Option<u32>,
+) -> std::io::Result<Vec<(String, u64)>> {
+    let search_distance = search_distance.unwrap_or(1);
+    let lev = Levenshtein::new(query, search_distance).unwrap();
     let mut results: Vec<(String, u64)> = Vec::new();
 
     let mut stream = map.search_with_state(lev).into_stream();
@@ -179,7 +195,7 @@ struct BZipBlock {
 #[derive(Serialize, Deserialize)]
 pub struct BZipTable {
     blocks: Vec<BZipBlock>,
-    length: usize,
+    pub length: usize,
 }
 
 impl std::fmt::Debug for BZipTable {

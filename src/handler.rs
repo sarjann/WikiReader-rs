@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
+    app.before_key_event(&key_event);
     match app.state {
         State::Search => match key_event.code {
             KeyCode::Esc => {
@@ -79,6 +80,11 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
                 app.up();
             }
 
+            // Help
+            KeyCode::Char('?') => {
+                app.set_state(State::Help);
+            }
+
             _ => {}
         },
         State::Browse => match key_event.code {
@@ -101,6 +107,17 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 app.up();
+            }
+            // gg (go to top)
+            KeyCode::Char('g') => match app.last_key {
+                Some(KeyCode::Char('g')) => {
+                    app.list_state.select(Some(0));
+                }
+                _ => {}
+            },
+            // G (go to bottom)
+            KeyCode::Char('G') => {
+                app.list_state.select(Some(app.search_results.len() - 1));
             }
             KeyCode::Enter => {
                 app.get_page();
@@ -135,6 +152,16 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
                 }
                 _ => {}
             },
+            // G (go to bottom)
+            KeyCode::Char('G') => {
+                // TODO
+            }
+            _ => {}
+        },
+        State::Help => match key_event.code {
+            KeyCode::Esc => {
+                app.set_state(State::Normal);
+            }
             _ => {}
         },
         // _ => match key_event.code {
@@ -144,6 +171,6 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         //     _ => {}
         // },
     }
-    app.last_key = Some(key_event.code);
+    app.after_key_event(&key_event);
     Ok(())
 }

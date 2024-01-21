@@ -1,12 +1,12 @@
 use ratatui::{
     layout::Alignment,
     prelude::{Constraint, Direction, Layout},
-    style::{Color, Style, Modifier},
-    widgets::{Block, BorderType, Borders, Padding, Paragraph, List, ListItem},
+    style::{Color, Modifier, Style},
+    widgets::{Block, BorderType, Borders, List, ListItem, Padding, Paragraph},
     Frame,
 };
 
-use crate::app::App;
+use crate::app::{App, State};
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, frame: &mut Frame) {
@@ -32,12 +32,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         ])
         .split(main_layout[0]);
 
-
     let middle_layout = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(100),
-        ])
+        .constraints([Constraint::Percentage(100)])
         .split(main_layout[1]);
 
     let bottom_layout = Layout::default()
@@ -64,27 +61,51 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         top_layout[1],
     );
 
-    // // Format with new line for each app result
-    // let mut search_results = String::new();
-    // for result in &app.search_results {
-    //     search_results.push_str(&format!("{}\n", result));
-    // }
-    //
-    // frame.render_widget(
-    //     Paragraph::new(format!("{}", search_results))
-    //         .block(Block::new().borders(Borders::ALL))
-    //         .alignment(Alignment::Left),
-    //     middle_layout[0],
-    // );
-    // let list: Vec<ListItem> = List::new(app.search_results.into());
-    let list = List::new(app.search_results.iter().map(|i| ListItem::new(i.as_str())).collect::<Vec<ListItem>>())
-        .block(Block::default().borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-        .highlight_symbol("* ");
+    match app.state {
+        State::Read => {
+            let revision = &app.page.as_ref().unwrap().revision;
+            if revision.is_none() {
+                return;
+            }
 
-    // frame.render_widget(list, middle_layout[0]);
-    frame.render_stateful_widget(list, middle_layout[0], &mut app.list_state);
+            let text = &revision.as_ref().unwrap().text;
+            if text.is_none() {
+                return;
+            }
+
+            let text_str_opt = &text.as_ref().unwrap().value;
+            let text_str;
+            if text_str_opt.is_none() {
+                text_str = String::from("");
+            } else {
+                text_str = text_str_opt.as_ref().unwrap().to_string();
+            }
+
+            let detail = Paragraph::new(text_str);
+
+            frame.render_widget(
+                detail
+                    .block(Block::default().borders(Borders::ALL))
+                    .alignment(Alignment::Left)
+                    .scroll((app.scroll, 0)),
+                middle_layout[0],
+            )
+        }
+        _ => {
+            let list = List::new(
+                app.search_results
+                    .iter()
+                    .map(|result| ListItem::new(result.title.as_str()))
+                    .collect::<Vec<ListItem>>(),
+            )
+            .block(Block::default().borders(Borders::ALL))
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+            .highlight_symbol("* ");
+
+            frame.render_stateful_widget(list, middle_layout[0], &mut app.list_state);
+        }
+    }
 
     // Bottom
     frame.render_widget(

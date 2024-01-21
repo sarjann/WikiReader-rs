@@ -1,32 +1,20 @@
 use bzip2::read::MultiBzDecoder;
 use std::fmt::Debug;
-use std::fs::{read_to_string, File};
+use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::io::{BufReader, Cursor, SeekFrom};
+use std::io::{BufReader, SeekFrom};
+use std::path::Path;
 
 //
 use fst::automaton::Levenshtein;
-use fst::{IntoStreamer, Map, MapBuilder, Set, SetBuilder, Streamer};
+use fst::{IntoStreamer, Map, MapBuilder, Streamer};
 use quick_xml;
-use quick_xml::{events::Event, Reader};
 use rayon::prelude::*;
+use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use serde::de;
 //
-
-// pub struct Source {
-//     path: String,
-// }
-//
-// impl Source {
-//     pub fn new(path: &str) -> Source {
-//         Source {
-//             path: path.to_string(),
-//         }
-//     }
-// }
 
 fn create_directory_if_not_exists(path: &str) {
     let path = path.replace("~", std::env::var("HOME").unwrap().as_str());
@@ -62,45 +50,63 @@ struct SiteInfo {
 }
 
 #[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-struct Redirect {
+pub struct Redirect {
     #[serde(rename = "@title")]
-    title: String,
+    pub title: String,
 }
 
 #[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-struct Revision {
-    id: u32,
-    parentid: Option<u32>,
-    timestamp: String,
-    format: Option<String>,
-    model: String,
+pub struct Text {
+    #[serde(rename = "@bytes")]
+    pub bytes: u32,
+    #[serde(rename = "@xml:space")]
+    pub xml_space: Option<String>,
+    #[serde(rename = "$value")]
+    pub value: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-struct Page {
-    title: String,
-    ns: u32,
-    id: u32,
-    block_id: Option<usize>,
-    redirect: Option<Redirect>,
-    revision: Option<Revision>,
+pub struct RevisionDetailedPage {
+    pub id: u32,
+    pub parentid: Option<u32>,
+    pub timestamp: String,
+    pub format: Option<String>,
+    pub model: String,
+    pub text: Option<Text>,
 }
 
 #[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-struct DetailedPage {
-    title: String,
-    ns: u32,
-    id: u32,
-    block_id: Option<usize>,
-    redirect: Option<Redirect>,
-    revision: Option<Revision>,
-    text: String,
+pub struct RevisionPage {
+    pub id: u32,
+    pub parentid: Option<u32>,
+    pub timestamp: String,
+    pub format: Option<String>,
+    pub model: String,
+}
+
+#[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Page {
+    pub title: String,
+    pub ns: u32,
+    pub id: u32,
+    pub block_id: Option<usize>,
+    pub redirect: Option<Redirect>,
+    pub revision: Option<RevisionPage>,
+}
+
+#[derive(Deserialize, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DetailedPage {
+    pub title: String,
+    pub ns: u32,
+    pub id: u32,
+    pub block_id: Option<usize>,
+    pub redirect: Option<Redirect>,
+    pub revision: Option<RevisionDetailedPage>,
 }
 
 trait PageItem {}
 impl PageItem for Page {}
 impl PageItem for DetailedPage {}
-
 
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename(serialize = "mediawiki"))]
@@ -109,48 +115,52 @@ struct MediaWiki {
     page: Vec<Page>,
 }
 
-pub fn open_fst() -> std::io::Result<Map<Vec<u8>>> {
-    let fst_path = format!("/home/s/Documents/wiki/meta/big.fst");
-    let map: Map<Vec<u8>> = Map::new(std::fs::read(fst_path).unwrap()).unwrap();
+pub fn open_fst(path: &str) -> std::io::Result<Map<Vec<u8>>> {
+    let map: Map<Vec<u8>> = Map::new(std::fs::read(path).unwrap()).unwrap();
     return Ok(map);
 }
 
-pub fn create_fst(pages: &Vec<Page>) -> Option<Map<Vec<u8>>> {
-    let fst_path = format!("/home/s/Documents/wiki/meta/big.fst");
-    // let map: Map<Vec<u8>> = Map::new(std::fs::read(fst_path).unwrap()).unwrap();
+pub fn open_bz_table(path: &str) -> std::io::Result<BZipTable> {
+    let bztable = serde_json::de::from_reader(File::open(path).unwrap()).unwrap();
+    return Ok(bztable);
+}
 
+pub fn create_fst(pages: &Vec<Page>, output_path: &str) -> Option<Map<Vec<u8>>> {
+    println!("Creating FST");
     let mut key_val_tuple = pages
-        .into_par_iter()
+        .iter()
         .map(|page| {
             let key = page.title.as_bytes();
-            let value = page.id;
+            let block_id = page.block_id.unwrap() as u64;
+            let page_id = page.id as u64;
+
+            // Store block_id and page_id (u32) in a u64
+            let value = (block_id << 32) | page_id;
             (key, value)
         })
         .collect::<Vec<_>>();
 
     key_val_tuple.sort_by(|a, b| a.0.cmp(b.0));
-    let mut wtr = io::BufWriter::new(File::create("map.fst").unwrap());
-    let mut build = MapBuilder::memory();
-    
+    let mut wtr = io::BufWriter::new(File::create(output_path).unwrap());
+    let mut build = MapBuilder::new(&mut wtr).unwrap();
+
     for (key, value) in key_val_tuple.iter() {
-        build.insert(key, *value as u64).unwrap();
+        build.insert(key, *value).unwrap();
     }
+
     build.finish().unwrap();
-
-    let bytes = build.into_inner().unwrap();
-
-    let map = Map::new(bytes).unwrap();
+    let map = Map::new(std::fs::read(output_path).unwrap()).unwrap();
     return Some(map);
 }
 
-pub fn search(set: &Set<Vec<u8>>, query: &str) -> std::io::Result<Vec<String>> {
+pub fn search(map: &Map<Vec<u8>>, query: &str) -> std::io::Result<Vec<(String, u64)>> {
     let lev = Levenshtein::new(query, 2).unwrap();
-    let mut results: Vec<String> = Vec::new();
+    let mut results: Vec<(String, u64)> = Vec::new();
 
-    let mut stream = set.search_with_state(lev).into_stream();
-    while let Some((v, _s)) = stream.next() {
-        let datstr = String::from_utf8(v.to_vec()).unwrap();
-        results.push(datstr);
+    let mut stream = map.search_with_state(lev).into_stream();
+    while let Some((k, v, _s)) = stream.next() {
+        let datstr = String::from_utf8(k.to_vec()).unwrap();
+        results.push((datstr, v));
     }
     return Ok(results);
 }
@@ -176,15 +186,23 @@ impl std::fmt::Debug for BZipTable {
     }
 }
 
-fn use_bzip_block(table: &BZipTable, buffer: &[u8], index: usize) -> Option<Vec<Page>> {
-    let size = table.blocks[index].size;
-    let offset = table.blocks[index].offset;
+fn use_bzip_block_n_non_detailed(
+    table: &BZipTable,
+    path: &Path,
+    block_id: usize,
+) -> Option<Vec<Page>> {
+    let size = table.blocks[block_id].size;
+    let offset = table.blocks[block_id].offset;
+    let mut reader = BufReader::new(File::open(path).unwrap());
+    reader.seek(SeekFrom::Start(offset as u64)).unwrap();
+    let mut reader = reader.take(size as u64);
 
-    let decoder = MultiBzDecoder::new(buffer);
+    let decoder = MultiBzDecoder::new(&mut reader);
 
-    let mut reader = BufReader::new(decoder);
+    let mut output_reader = BufReader::new(decoder);
+
     let mut parser: std::result::IntoIter<Vec<Page>> =
-        quick_xml::de::from_reader(&mut reader).into_iter();
+        quick_xml::de::from_reader(&mut output_reader).into_iter();
 
     let pages = match parser.next() {
         Some(p) => Some(p),
@@ -193,15 +211,21 @@ fn use_bzip_block(table: &BZipTable, buffer: &[u8], index: usize) -> Option<Vec<
     return pages;
 }
 
-fn use_bzip_block_n(table: &BZipTable, reader: &mut BufReader<File>, block_id: usize) -> Option<Vec<DetailedPage>> {
+fn use_bzip_block_n_detailed(
+    table: &BZipTable,
+    path: &Path,
+    block_id: usize,
+) -> Option<Vec<DetailedPage>> {
     let size = table.blocks[block_id].size;
     let offset = table.blocks[block_id].offset;
+    let mut reader = BufReader::new(File::open(path).unwrap());
     reader.seek(SeekFrom::Start(offset as u64)).unwrap();
     let mut reader = reader.take(size as u64);
 
     let decoder = MultiBzDecoder::new(&mut reader);
 
     let mut output_reader = BufReader::new(decoder);
+
     let mut parser: std::result::IntoIter<Vec<DetailedPage>> =
         quick_xml::de::from_reader(&mut output_reader).into_iter();
 
@@ -212,47 +236,37 @@ fn use_bzip_block_n(table: &BZipTable, reader: &mut BufReader<File>, block_id: u
     return pages;
 }
 
-fn thing() {
-    // let input_path = "/home/s/Documents/wiki/enwiki-20230820-pages-articles-multistream.xml.bz2";
-    let input_path = "/home/s/Documents/wiki/simplewiki-20230820-pages-articles-multistream.xml.bz2";
+pub fn get_detailed_page(
+    table: &BZipTable,
+    page_id: u64,
+    block_id: u64,
+    path: &Path,
+) -> Option<DetailedPage> {
+    let pages_block = use_bzip_block_n_detailed(&table, path, block_id as usize);
 
-    let f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(f);
+    // panic!("Block ID: {}, Page ID: {}", block_id, page_id);
+    let mut pages = pages_block.unwrap();
 
-    let table: BZipTable = create_bz_table(&mut reader).unwrap();
-    for i in 0..table.length {
-        println!("{}: {:?}", i, table.blocks[i]);
+    let mut selected_id: Option<usize> = None;
+    for (index, page) in pages.iter().enumerate() {
+        if page.id == page_id as u32 {
+            selected_id = Some(index);
+        }
     }
-
-    println!("-bzip use_block");
-    //
-    let f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(f);
-
-    let pages: Vec<Page> = indexing_bzip_blocks(&table, &mut reader).unwrap();
+    return match selected_id {
+        Some(id) => Some(pages.remove(id)),
+        None => None,
+    };
 }
 
-fn get_detailed_page(table: &BZipTable, page: &Page, reader: &mut BufReader<File>) -> Option<Page> {
-    let block_id = page.block_id.unwrap();
-
-    let block_pages = use_bzip_block_n(&table, reader, block_id as usize);
-    for block_page in block_pages.unwrap() {
-        if page.id == block_page.id {
-            return Some(block_page);
-        } 
-    }
-    return None;
-}
 fn indexing_bzip_blocks(
     table: &BZipTable,
-    reader: &mut BufReader<File>,
+    path: &Path,
+    output_path: &str,
 ) -> std::io::Result<Vec<Page>> {
     let block_count = table.length;
-    let mut pages: Vec<Page> = Vec::new();
-    let interval = 1000;
 
     println!("Block Count: {}", block_count);
-    let mut previous_time = std::time::Instant::now();
 
     let (sender, receiver) = std::sync::mpsc::channel();
 
@@ -260,24 +274,9 @@ fn indexing_bzip_blocks(
     (1..block_count - 1)
         .into_par_iter()
         .for_each_with(sender, |s, i| {
-            let offset = table.blocks[i].offset;
-            let size = table.blocks[i].size;
-
-            // let input_path =
-            //     "/home/s/Documents/wiki/enwiki-20230820-pages-articles-multistream.xml.bz2";
-            let input_path = "/home/s/Documents/wiki/simplewiki-20230820-pages-articles-multistream.xml.bz2";
-
-            let f = File::open(input_path).unwrap();
-            let mut reader = BufReader::new(f);
-
-            reader.seek(SeekFrom::Start(offset as u64)).unwrap();
-            let mut reader = reader.take(size as u64);
-            let buf = reader.fill_buf().unwrap();
-
-            let pages_block = use_bzip_block(&table, buf, i);
+            let pages_block = use_bzip_block_n_non_detailed(&table, &path, i);
             if pages_block.is_none() {
                 return ();
-                // return Vec::new();
             }
             let mut pages = pages_block.unwrap();
             for page in pages.iter_mut() {
@@ -285,7 +284,6 @@ fn indexing_bzip_blocks(
             }
 
             s.send(pages).unwrap()
-            // pages
         });
 
     let pages: Vec<Page> = receiver
@@ -294,44 +292,20 @@ fn indexing_bzip_blocks(
         .into_iter()
         .flatten()
         .collect();
-    
-    println!("pages_len: {}", pages.len());
-    // Write pages
-    // let path_output = "/home/s/Documents/wiki/meta/pages_w.json";
-    let path_output = "/home/s/Documents/wiki/meta/pages_n.json";
-    let _ = serde_json::ser::to_writer(File::create(path_output).unwrap(), &pages);
 
-    // pages.sort();
-    // let vec: Vec<Page> = par_iter.collect();
-    // for i in 1..block_count - 1 {
-    //     if i % interval== 0 {
-    //         print!(
-    //             "\rCount: {}k / {}k, Percentage {}%, ETA: {}m",
-    //             i as f32 / 1000.0,
-    //             (i / block_count) * 100,
-    //             block_count as f32 / 1000.0,
-    //             (std::time::Instant::now() - previous_time).as_secs()
-    //                 * (block_count - i) as u64
-    //                 / (interval as u64)*60
-    //         );
-    //         previous_time = std::time::Instant::now();
-    //         std::io::stdout().flush().unwrap();
-    //     }
-    //
-    //     let pages_block = use_bzip_block(&table, reader, i);
-    //     if pages_block.is_none() {
-    //         continue;
-    //     }
-    //     for mut page in pages_block.unwrap() {
-    //         page.block_id = Some(i as u32);
-    //         pages.push(page);
-    //     }
-    // }
+    println!("pages_len: {}", pages.len());
+
+    // Write pages
+    let _ = serde_json::ser::to_writer(File::create(output_path).unwrap(), &pages);
+
     println!("pages_len: {}", pages.len());
     return Ok(pages);
 }
 
-fn create_bz_table(reader: &mut BufReader<File>) -> std::io::Result<BZipTable> {
+pub fn create_bz_table(
+    reader: &mut BufReader<File>,
+    output_path: &str,
+) -> std::io::Result<BZipTable> {
     let mut offsets: Vec<usize> = Vec::new();
     let mut count = 0;
     // Magic number in bzip
@@ -373,66 +347,74 @@ fn create_bz_table(reader: &mut BufReader<File>) -> std::io::Result<BZipTable> {
     }
     let table = BZipTable { blocks, length };
 
-    let path_output = "/home/s/Documents/wiki/meta/bzip_table.json";
-    let _ = serde_json::ser::to_writer(File::create(path_output).unwrap(), &table);
+    let _ = serde_json::ser::to_writer(File::create(output_path).unwrap(), &table);
     return Ok(table);
-}
-
-pub fn debugging() {
-    println!("-bzip get_block");
-    // let input_path =
-    //     "/home/s/Documents/wiki/simplewiki-20230820-pages-articles-multistream.xml.bz2";
-    let input_path = "/home/s/Documents/wiki/enwiki-20230820-pages-articles-multistream.xml.bz2";
-
-    let f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(f);
-
-    let table: BZipTable = create_bz_table(&mut reader).unwrap();
-    for i in 0..table.length {
-        println!("{}: {:?}", i, table.blocks[i]);
-    }
-
-    println!("-bzip use_block");
-    //
-    let f = File::open(input_path).unwrap();
-    let mut reader = BufReader::new(f);
-    // let _ = use_bzip_block(&table, &mut reader, 1);
-    let _ = indexing_bzip_blocks(&table, &mut reader);
-}
-
-pub fn load() {
-    // let path_output = "/home/s/Documents/wiki/meta/bzip_table.json";
-    // let table: BZipTable = serde_json::de::from_reader(
-    //     File::open(path_output).unwrap(),
-    // ).unwrap();
-    //
-    // let input_path = "/home/s/Documents/wiki/enwiki-20230820-pages-articles-multistream.xml.bz2";
-    // let pages: Vec<Page> = indexing_bzip_blocks(&table, &mut BufReader::new(File::open(input_path).unwrap())).unwrap();
-    // let path_output = "/home/s/Documents/wiki/meta/pages.json";
-    // let _ = serde_json::ser::to_writer(
-    //     File::create(path_output).unwrap(),
-    //     &pages,
-    // );
-    // println!("table: {:?}", table);
-
-    // let input_path = "/home/s/Documents/wiki/meta/pages.json";
-    // let pages: Pages = serde_json::de::from_reader(File::open(input_path).unwrap()).unwrap();
-    //
-    // serde_cbor::ser::to_writer(
-    //     File::create("/home/s/Documents/wiki/meta/pages.cbor").unwrap(),
-    //     &pages,
-    // )
-    // .unwrap();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn thing() {
+        let base_path = Path::new("/home/s/Documents/wiki/simple/");
+        // let base_path = Path::new("/home/s/Documents/wiki/bigger/");
+        // let input_path =
+        //     "/home/s/Documents/wiki/simple/meta/simplewiki-20230820-pages-articles-multistream.xml.bz2";
+
+        let input_bz2_path = base_path.join("base.bz2");
+
+        //// Index
+        // let f = File::open(&input_bz2_path).unwrap();
+        //
+        // let mut reader = BufReader::new(f);
+        //
+        // let output_bzip_path = base_path.join("meta/bzip_table.json");
+        // let table: BZipTable =
+        //     create_bz_table(&mut reader, output_bzip_path.to_str().unwrap()).unwrap();
+        // for i in 0..table.length {
+        //     println!("{}: {:?}", i, table.blocks[i]);
+        // }
+        ////
+
+        let table: BZipTable = serde_json::de::from_reader(
+            File::open(base_path.join("meta/bzip_table.json")).unwrap(),
+        )
+        .unwrap();
+
+        println!("-bzip use_block");
+
+        // let f = File::open(&input_bz2_path).unwrap();
+        // let mut reader = BufReader::new(f);
+
+        let index_path = base_path.join("meta/indexed");
+        // let pages: Vec<Page> =
+        //     indexing_bzip_blocks(&table, &input_bz2_path, index_path.to_str().unwrap()).unwrap();
+
+        let pages: Vec<Page> = serde_json::from_reader(File::open(index_path).unwrap()).unwrap();
+        println!("Page Len {}", pages.len());
+
+        let output_fst = base_path.join("meta/map.fst");
+        let map = create_fst(&pages, &output_fst.to_str().unwrap()).unwrap();
+        // let fst = open_fst("/home/s/Documents/wiki/meta/big.fst").unwrap();
+    }
+
+    fn thing2() {
+        let base_path = Path::new("/home/s/Documents/wiki/simple/");
+        let input_bz2_path = base_path.join("base.bz2");
+
+        let table: BZipTable = serde_json::de::from_reader(
+            File::open(base_path.join("meta/bzip_table.json")).unwrap(),
+        )
+        .unwrap();
+
+        println!("-bzip use_block");
+        let page = get_detailed_page(&table, 47955, 228, &input_bz2_path).unwrap();
+        println!("Page: {:?}", page);
+    }
+
     #[test]
     fn other() {
-        println!("thing");
-        thing();
+        thing2();
     }
 
     // #[test]

@@ -26,6 +26,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         State::Command => match key_event.code {
             KeyCode::Esc => {
                 app.set_state(State::Normal);
+                app.command.clear();
             }
 
             KeyCode::Char(c) => {
@@ -83,23 +84,49 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         State::Browse => match key_event.code {
             KeyCode::Esc => {
                 app.set_state(State::Normal);
-            },
+            }
             // Command mode
             KeyCode::Char(':') => {
                 app.set_state(State::Command);
                 app.command.push(':')
-            },
+            }
             // Search Mode
             KeyCode::Char('/') => {
                 app.set_state(State::Search);
                 app.search.clear();
-            },
+            }
             // Navigation
             KeyCode::Down | KeyCode::Char('j') => {
-                app.next();
+                app.down();
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                app.previous();
+                app.up();
+            }
+            KeyCode::Enter => {
+                app.get_page();
+            }
+            _ => {}
+        },
+        State::Read => match key_event.code {
+            KeyCode::Esc => {
+                app.set_state(State::Normal);
+            }
+            // Command mode
+            KeyCode::Char(':') => {
+                app.set_state(State::Command);
+                app.command.push(':')
+            }
+            // Search Mode
+            KeyCode::Char('/') => {
+                app.set_state(State::Search);
+                app.search.clear();
+            }
+            // Navigation
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.down();
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.up();
             }
             _ => {}
         },

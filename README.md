@@ -31,7 +31,7 @@ already exist.
 The `wiki_bzip_path` is the path to the bzip2 (xml) archive file that is
 downloaded. It's expected that this is a multistream version.
 
-https://dumps.wikimedia.org/mirrors.html
+https://meta.wikimedia.org/wiki/Data_dump_torrents
 
 The meta_directory is the place you want any indexing / file produced by this
 project to go.

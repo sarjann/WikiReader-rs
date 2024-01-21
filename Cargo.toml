@@ -1,6 +1,6 @@
 [package]
 name = "wiki_reader"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Sarjan Narwan <sarjan@narwan.dev>"]
 license = "MIT"
 description = "Terminal app to search through wikipedia local dumps"
@@ -10,6 +10,6 @@ edition = "2021"
 crossterm = "0.27.0"
 fst = "0.4.7"
 ratatui = "0.24.0"
-wiki_loader = { version = "0.1.0", path = "./src/wiki_loader" }
+wiki_loader = { version = "0.1.1", path = "./src/wiki_loader" }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"

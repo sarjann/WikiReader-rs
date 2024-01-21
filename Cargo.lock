@@ -601,7 +601,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
-name = "wiki"
+name = "wiki_loader"
 version = "0.1.0"
 dependencies = [
  "bzip2",
@@ -614,7 +614,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wiki-reader"
+name = "wiki_reader"
 version = "0.1.0"
 dependencies = [
  "crossterm",
@@ -622,7 +622,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
- "wiki",
+ "wiki_loader",
 ]
 
 [[package]]

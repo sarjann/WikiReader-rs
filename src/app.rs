@@ -6,7 +6,7 @@ use serde_json;
 use std::error;
 use std::fmt::Display;
 use std::path::Path;
-use wiki;
+use wiki_loader;
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -49,7 +49,7 @@ pub struct App {
     pub state: State,
     pub search: String,
     pub command: String,
-    pub page: Option<wiki::DetailedPage>,
+    pub page: Option<wiki_loader::DetailedPage>,
     pub selected_page: Option<usize>,
     pub search_results: Vec<SearchElement<u64>>,
     pub list_state: ListState,
@@ -57,7 +57,7 @@ pub struct App {
     // Internals
     pub fst: Map<Vec<u8>>,
     pub base_path: std::path::PathBuf,
-    pub bztable: wiki::BZipTable,
+    pub bztable: wiki_loader::BZipTable,
 
     // Crossterm
     pub last_key: Option<KeyCode>,
@@ -94,7 +94,7 @@ impl Default for App {
                 "Could not find map.fst in meta directory,
                 running indexing"
             );
-            match wiki::initial_indexing(
+            match wiki_loader::initial_indexing(
                 bzpath.to_str().unwrap().into(),
                 meta_path.to_str().unwrap().into(),
             ) {
@@ -118,9 +118,9 @@ impl Default for App {
             list_state: ListState::default(),
             scroll: 0,
             // Internals
-            fst: wiki::open_fst(fst_path.to_str().unwrap()).unwrap(),
+            fst: wiki_loader::open_fst(fst_path.to_str().unwrap()).unwrap(),
             base_path: bzpath.to_path_buf(),
-            bztable: wiki::open_bz_table(table_path.to_str().unwrap()).unwrap(),
+            bztable: wiki_loader::open_bz_table(table_path.to_str().unwrap()).unwrap(),
             last_key: None,
         };
     }
@@ -150,7 +150,7 @@ impl App {
     }
 
     pub fn search(&mut self) {
-        let out_search = wiki::search(&self.fst, &self.search).unwrap();
+        let out_search = wiki_loader::search(&self.fst, &self.search).unwrap();
         self.search_results = Vec::new();
         for (key, value) in out_search.iter() {
             self.search_results.push(SearchElement::<u64> {
@@ -170,7 +170,7 @@ impl App {
         // Extract page_id and block_id
         let page_id = val & 0xffffffff;
         let block_id = val >> 32;
-        self.page = wiki::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
+        self.page = wiki_loader::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
 
         if self.page.is_some() {
             self.state = State::Read;

@@ -1,5 +1,4 @@
 use crossterm::event::KeyCode;
-use fst::Map;
 use ratatui::widgets::ListState;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -43,7 +42,6 @@ impl Display for State {
 pub struct WikiConfig {
     pub wiki_bzip_path: String,
     pub meta_directory: String,
-    pub search_distance: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -60,12 +58,10 @@ pub struct App {
     pub bottom_text: String,
 
     // Internals
-    pub fst: Map<Vec<u8>>,
+    pub searcher: wiki_loader::Searcher,
     pub base_path: std::path::PathBuf,
+    pub meta_path: std::path::PathBuf,
     pub bztable: wiki_loader::BZipTable,
-
-    // Config
-    pub search_distance: u32,
 
     // Crossterm
     pub last_key: Option<KeyCode>,
@@ -96,10 +92,10 @@ impl Default for App {
         let meta_path = Path::new(_meta_path);
 
         let table_path = meta_path.join("table.json");
-        let fst_path = meta_path.join("map.fst");
-        if !fst_path.exists() {
+        let searcher_path = meta_path.join("map.index");
+        if !searcher_path.exists() {
             println!(
-                "Could not find map.fst in meta directory,
+                "Could not find map.index in meta directory,
                 running indexing"
             );
             match wiki_loader::initial_indexing(
@@ -112,10 +108,13 @@ impl Default for App {
                 }
             }
         } else {
-            println!("Found map.fst in meta directory, assuming indexed");
+            println!("Found map.index in meta directory, assuming indexed");
         }
 
-        let search_distance = config.search_distance.unwrap_or(1);
+        let mut searcher = wiki_loader::Searcher::new();
+        searcher
+            .open_searcher(searcher_path.to_str().unwrap())
+            .unwrap();
 
         return Self {
             running: true,
@@ -129,12 +128,10 @@ impl Default for App {
             scroll: 0,
             bottom_text: String::new(),
             // Internals
-            fst: wiki_loader::open_fst(fst_path.to_str().unwrap()).unwrap(),
+            searcher,
             base_path: bzpath.to_path_buf(),
+            meta_path: meta_path.to_path_buf(),
             bztable: wiki_loader::open_bz_table(table_path.to_str().unwrap()).unwrap(),
-
-            // Config
-            search_distance,
 
             // Crossterm
             last_key: None,
@@ -158,7 +155,7 @@ impl App {
             ":q" => self.quit(),
             ":help" => self.state = State::Help,
             ":meta" => {
-                let page_count = self.fst.len();
+                let page_count = self.searcher.len();
                 let block_count = self.bztable.length;
                 self.bottom_text = format!("Page count: {page_count}\nBlock count: {block_count}");
             }
@@ -167,6 +164,12 @@ impl App {
                     let page = self.page.as_ref().unwrap();
                     self.bottom_text = format!("{}", page);
                 }
+            }
+            ":clearcache" => {
+                if self.meta_path.exists() {
+                    let _ = std::fs::remove_dir_all(&self.meta_path);
+                }
+                panic!("Cache cleared, exiting");
             }
             _ => {}
         }
@@ -178,8 +181,7 @@ impl App {
     }
 
     pub fn search(&mut self) {
-        let out_search =
-            wiki_loader::search(&self.fst, &self.search, Some(self.search_distance)).unwrap();
+        let out_search = self.searcher.search(&self.search).unwrap();
         self.search_results = Vec::new();
         for (key, value) in out_search.iter() {
             self.search_results.push(SearchElement::<u64> {
@@ -205,8 +207,9 @@ impl App {
         if self.page.is_some() {
             if self.page.as_ref().unwrap().redirect.is_some() {
                 let redirect = self.page.as_ref().unwrap().redirect.as_ref().unwrap();
-                let val = self.fst.get(&redirect.title).unwrap();
+                let val = self.searcher.get(&redirect.title).unwrap();
 
+                // std::io::Result<Vec<(String, u64)>>
                 // Extract page_id and block_id
                 let page_id = val & 0xffffffff;
                 let block_id = val >> 32;
@@ -291,5 +294,4 @@ impl App {
     pub fn after_key_event(&mut self, key_event: &crossterm::event::KeyEvent) {
         self.last_key = Some(key_event.code);
     }
-
 }

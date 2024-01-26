@@ -6,7 +6,8 @@ use std::error;
 use std::fmt::Display;
 use std::path::Path;
 use wiki_loader;
-use wiki_loader::Searchable;
+use wiki_loader::page::{DetailedPage, Page};
+use wiki_loader::search::Searchable;
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -51,7 +52,7 @@ pub struct App {
     pub state: State,
     pub search: String,
     pub command: String,
-    pub page: Option<wiki_loader::DetailedPage>,
+    pub page: Option<wiki_loader::page::DetailedPage>,
     pub selected_page: Option<usize>,
     pub search_results: Vec<SearchElement<u64>>,
     pub list_state: ListState,
@@ -59,7 +60,7 @@ pub struct App {
     pub bottom_text: String,
 
     // Internals
-    pub searcher: wiki_loader::Searcher,
+    pub searcher: wiki_loader::search::Searcher,
     pub base_path: std::path::PathBuf,
     pub meta_path: std::path::PathBuf,
     pub bztable: wiki_loader::BZipTable,
@@ -112,7 +113,7 @@ impl Default for App {
             println!("Found map.index in meta directory, assuming indexed");
         }
 
-        let mut searcher = wiki_loader::Searcher::new();
+        let mut searcher = wiki_loader::search::Searcher::new();
         searcher
             .open_searcher(searcher_path.to_str().unwrap())
             .unwrap();

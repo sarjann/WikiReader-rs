@@ -6,6 +6,7 @@ use std::error;
 use std::fmt::Display;
 use std::path::Path;
 use wiki_loader;
+use wiki_loader::Searchable;
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 

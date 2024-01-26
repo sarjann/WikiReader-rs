@@ -125,18 +125,27 @@ struct MediaWiki {
     page: Vec<Page>,
 }
 
+pub trait Searchable {
+    fn new() -> Self;
+    fn get(&self, key: &str) -> Option<u64>;
+    fn len(&self) -> usize;
+    fn search(&self, query: &str) -> std::io::Result<Vec<(String, u64)>>;
+    fn open_searcher(&mut self, path: &str) -> std::io::Result<()>;
+    fn create_searcher(&mut self, pages: &Vec<Page>, output_path: &str) -> std::io::Result<()>;
+}
+
 #[derive(Debug)]
 pub struct Searcher {
     map: Option<Map<Vec<u8>>>,
 }
 
-impl Searcher {
-    pub fn new() -> Searcher {
+impl Searchable for Searcher {
+    fn new() -> Searcher {
         let searcher = Searcher { map: None };
         return searcher;
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         if self.map.is_none() {
             return 0;
         }
@@ -144,7 +153,7 @@ impl Searcher {
         return len;
     }
 
-    pub fn get(&self, key: &str) -> Option<u64> {
+    fn get(&self, key: &str) -> Option<u64> {
         if self.map.is_none() {
             return None;
         }
@@ -152,12 +161,12 @@ impl Searcher {
         return val;
     }
 
-    pub fn open_searcher(&mut self, path: &str) -> std::io::Result<()> {
+    fn open_searcher(&mut self, path: &str) -> std::io::Result<()> {
         self.map = Some(Map::new(std::fs::read(path).unwrap()).unwrap());
         return Ok(());
     }
 
-    pub fn create_searcher(&mut self, pages: &Vec<Page>, output_path: &str) -> std::io::Result<()> {
+    fn create_searcher(&mut self, pages: &Vec<Page>, output_path: &str) -> std::io::Result<()> {
         println!("Creating Searcher");
         let mut key_val_tuple = pages
             .iter()
@@ -193,7 +202,7 @@ impl Searcher {
         return Ok(());
     }
 
-    pub fn search(&self, query: &str) -> std::io::Result<Vec<(String, u64)>> {
+    fn search(&self, query: &str) -> std::io::Result<Vec<(String, u64)>> {
         if self.map.is_none() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,

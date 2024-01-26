@@ -1,7 +1,11 @@
-use fst::automaton::{Automaton, StartsWith, StartsWithState, Str, Subsequence};
-use fst::{IntoStreamer, Map, MapBuilder, Streamer};
-use std::io::BufWriter;
+// Standard Lib
 use std::fs::File;
+use std::io::BufWriter;
+
+// Third Party
+use fst::automaton::Str;
+use fst::{IntoStreamer, Map, MapBuilder, Streamer};
+
 use crate::page::Page;
 
 pub trait Searchable {

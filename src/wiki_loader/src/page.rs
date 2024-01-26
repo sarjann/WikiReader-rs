@@ -1,6 +1,11 @@
-use serde::{Deserialize, Serialize};
+// Standard Lib
 use std::fmt::{Debug, Display};
-use std::fs::File;
+use std::path::Path;
+
+// Third Party
+use serde::{Deserialize, Serialize};
+
+use crate::bzip::{use_bzip_block_n_detailed, BZipTable};
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct NameSpace {
@@ -98,3 +103,25 @@ impl Display for DetailedPage {
 trait PageItem {}
 impl PageItem for Page {}
 impl PageItem for DetailedPage {}
+
+pub fn get_detailed_page(
+    table: &BZipTable,
+    page_id: u64,
+    block_id: u64,
+    path: &Path,
+) -> Option<DetailedPage> {
+    let pages_block = use_bzip_block_n_detailed(&table, path, block_id as usize);
+
+    let mut pages = pages_block.unwrap();
+
+    let mut selected_id: Option<usize> = None;
+    for (index, page) in pages.iter().enumerate() {
+        if page.id == page_id as u32 {
+            selected_id = Some(index);
+        }
+    }
+    return match selected_id {
+        Some(id) => Some(pages.remove(id)),
+        None => None,
+    };
+}

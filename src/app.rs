@@ -5,9 +5,10 @@ use serde_json;
 use std::error;
 use std::fmt::Display;
 use std::path::Path;
-use wiki_loader;
-use wiki_loader::page::{DetailedPage, Page};
-use wiki_loader::search::Searchable;
+use wiki_loader::{
+    bzip, page,
+    search::{self, Searchable},
+};
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -52,7 +53,7 @@ pub struct App {
     pub state: State,
     pub search: String,
     pub command: String,
-    pub page: Option<wiki_loader::page::DetailedPage>,
+    pub page: Option<page::DetailedPage>,
     pub selected_page: Option<usize>,
     pub search_results: Vec<SearchElement<u64>>,
     pub list_state: ListState,
@@ -60,10 +61,10 @@ pub struct App {
     pub bottom_text: String,
 
     // Internals
-    pub searcher: wiki_loader::search::Searcher,
+    pub searcher: search::Searcher,
     pub base_path: std::path::PathBuf,
     pub meta_path: std::path::PathBuf,
-    pub bztable: wiki_loader::BZipTable,
+    pub bztable: bzip::BZipTable,
 
     // Crossterm
     pub last_key: Option<KeyCode>,
@@ -113,7 +114,7 @@ impl Default for App {
             println!("Found map.index in meta directory, assuming indexed");
         }
 
-        let mut searcher = wiki_loader::search::Searcher::new();
+        let mut searcher = search::Searcher::new();
         searcher
             .open_searcher(searcher_path.to_str().unwrap())
             .unwrap();
@@ -133,7 +134,7 @@ impl Default for App {
             searcher,
             base_path: bzpath.to_path_buf(),
             meta_path: meta_path.to_path_buf(),
-            bztable: wiki_loader::open_bz_table(table_path.to_str().unwrap()).unwrap(),
+            bztable: bzip::open_bz_table(table_path.to_str().unwrap()).unwrap(),
 
             // Crossterm
             last_key: None,
@@ -194,6 +195,9 @@ impl App {
     }
 
     pub fn get_page(&mut self) {
+        if self.search_results.len() == 0 {
+            return;
+        }
         self.selected_page = self.list_state.selected();
         let _title = self.search_results[self.selected_page.unwrap()]
             .title
@@ -203,8 +207,7 @@ impl App {
         // Extract page_id and block_id
         let page_id = val & 0xffffffff;
         let block_id = val >> 32;
-        self.page =
-            wiki_loader::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
+        self.page = page::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
 
         if self.page.is_some() {
             if self.page.as_ref().unwrap().redirect.is_some() {
@@ -217,16 +220,13 @@ impl App {
                 let block_id = val >> 32;
 
                 self.bottom_text = format!("Redirecting to {}", &redirect.title);
-                self.page = wiki_loader::get_detailed_page(
-                    &self.bztable,
-                    page_id,
-                    block_id,
-                    &self.base_path,
-                );
+                self.page =
+                    page::get_detailed_page(&self.bztable, page_id, block_id, &self.base_path);
             }
             self.state = State::Read;
             self.scroll = 0;
         }
+        self.selected_page = None;
     }
 
     pub fn unselect(&mut self) {
@@ -263,23 +263,25 @@ impl App {
         self.list_state.select(Some(i));
     }
 
-    pub fn up(&mut self) {
+    pub fn up(&mut self, n: u16) {
         match self.state {
             State::Browse => self.previous(),
             State::Read => {
-                if self.scroll > 0 {
-                    self.scroll -= 1;
+                if n >= self.scroll {
+                    self.scroll = 0;
+                } else {
+                    self.scroll -= n;
                 }
             }
             _ => {}
         }
     }
 
-    pub fn down(&mut self) {
+    pub fn down(&mut self, n: u16) {
         match self.state {
             State::Browse => self.next(),
             State::Read => {
-                self.scroll += 1;
+                self.scroll += n;
             }
             _ => {}
         }

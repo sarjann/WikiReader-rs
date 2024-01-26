@@ -74,10 +74,10 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
                 app.right();
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                app.down();
+                app.down(1);
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                app.up();
+                app.up(1);
             }
 
             // Help
@@ -103,10 +103,10 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             }
             // Navigation
             KeyCode::Down | KeyCode::Char('j') => {
-                app.down();
+                app.down(1);
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                app.up();
+                app.up(1);
             }
             // gg (go to top)
             KeyCode::Char('g') => match app.last_key {
@@ -140,11 +140,24 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             }
             // Navigation
             KeyCode::Down | KeyCode::Char('j') => {
-                app.down();
+                app.down(1);
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                app.up();
+                app.up(1);
             }
+
+            KeyCode::Char('u') => {
+                if key_event.modifiers == KeyModifiers::CONTROL {
+                    app.up(10);
+                }
+            }
+
+            KeyCode::Char('d') => {
+                if key_event.modifiers == KeyModifiers::CONTROL {
+                    app.down(10);
+                }
+            }
+
             // gg (go to top)
             KeyCode::Char('g') => match app.last_key {
                 Some(KeyCode::Char('g')) => {

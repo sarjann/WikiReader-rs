@@ -112,12 +112,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 / - Search
                 j or ↓ - Down
                 k or ↑ - Up
+                Ctrl+d - Bigger Down
+                Ctrl+u - Bigger Up
                 gg - Top
                 G - Bottom (Supported in some situations)
                 Enter - Select
                 Esc - Get back to normal mode
                 ? - Help
-                Ctrl+C - Quit
+                Ctrl+c - Quit
                 : - Command Mode
 
                 -- Command Mode --

@@ -1,15 +1,16 @@
 [package]
 name = "wiki_loader"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "A tool to load and search wikipedia multistream dumps"
+repository = "https://github.com/sarjann/WikiReader-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bzip2 = "0.4.4"
-fst = { version = "0.4.7", features = ["levenshtein"] }
+fst = { version = "0.4.7" }
 quick-xml = { version = "0.31.0", features = ["serialize", "async-tokio"] }
 rayon = "1.8.0"
 serde = { version = "1.0.193", features = ["derive"] }

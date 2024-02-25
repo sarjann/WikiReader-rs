@@ -21,9 +21,6 @@ With the following format:
 {
     "wiki_bzip_path": "~/Documents/wiki/simple/base.bz2",
     "meta_directory": "~/Documents/wiki/simple/meta",
-
-    // Optional
-    "search_distance": 1
 }
 ```
 
@@ -41,9 +38,6 @@ to be done once).
 
 The meta_directory is the place you want any indexing / file produced by this
 project to go.
-
-The field search_distance (default value of 1) is used to specify how far words
-from what you type can be to show up in search results.
 
 ## Usage
 
@@ -67,6 +61,11 @@ perfect, e.g.
 
 * Search isn't super great right now, will need to be improved
 * Not currently parsing wiki text so no formatting on the output
+* Support for images locally, and possibly allowing you to set a flag for remote.
+
+As this is still fairly new there will probably be quite a few breaking changes
+along the way, e.g. changes the config path or the saved file names (which
+will require reindexing).
 
 ## Contributing
 

@@ -62,6 +62,7 @@ perfect, e.g.
 * Search isn't super great right now, will need to be improved
 * Not currently parsing wiki text so no formatting on the output
 * Support for images locally, and possibly allowing you to set a flag for remote.
+* Need to improve serialization used for indexing, large json file can lead to slower start.
 
 As this is still fairly new there will probably be quite a few breaking changes
 along the way, e.g. changes the config path or the saved file names (which

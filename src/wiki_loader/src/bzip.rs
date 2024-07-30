@@ -97,7 +97,7 @@ pub fn indexing_bzip_blocks(table: &BZipTable, path: &Path) -> std::io::Result<V
 
     let (sender, receiver) = std::sync::mpsc::channel();
 
-    println!("Indexing pages in blocks");
+    println!("Indexing bzip blocks");
     (1..block_count - 1)
         .into_par_iter()
         .for_each_with(sender, |s, i| {

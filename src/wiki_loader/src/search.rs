@@ -3,9 +3,11 @@ use std::fs::File;
 use std::io::BufWriter;
 
 // Third Party
-use fst::automaton::Str;
-use fst::{IntoStreamer, Map, MapBuilder, Streamer};
+use fst::automaton::Levenshtein;
+use fst::{IntoStreamer, Map, MapBuilder};
+use regex::Regex;
 
+// Local
 use crate::page::Page;
 
 pub trait Searchable {
@@ -25,7 +27,7 @@ pub struct Searcher {
 impl Searchable for Searcher {
     fn new() -> Searcher {
         let searcher = Searcher { map: None };
-        return searcher;
+        searcher
     }
 
     fn len(&self) -> usize {
@@ -33,7 +35,7 @@ impl Searchable for Searcher {
             return 0;
         }
         let len = self.map.as_ref().unwrap().len();
-        return len;
+        len
     }
 
     fn get(&self, key: &str) -> Option<u64> {
@@ -41,12 +43,12 @@ impl Searchable for Searcher {
             return None;
         }
         let val = self.map.as_ref().unwrap().get(key);
-        return val;
+        val
     }
 
     fn open_searcher(&mut self, path: &str) -> std::io::Result<()> {
         self.map = Some(Map::new(std::fs::read(path).unwrap()).unwrap());
-        return Ok(());
+        Ok(())
     }
 
     fn create_searcher(&mut self, pages: &Vec<Page>, output_path: &str) -> std::io::Result<()> {
@@ -82,33 +84,32 @@ impl Searchable for Searcher {
         let map = Map::new(std::fs::read(output_path).unwrap()).unwrap();
 
         self.map = Some(map);
-        return Ok(());
+        Ok(())
     }
 
     fn search(&self, query: &str) -> std::io::Result<Vec<(String, u64)>> {
-        if self.map.is_none() {
+        let pattern_contains = format!(r"(?i){query}");
+        let pattern_identical = format!(r"(?i)^{query}$");
+        let re_contains = Regex::new(&pattern_contains).unwrap();
+        let re_identical = Regex::new(&pattern_identical).unwrap();
+
+        let Some(map) = &self.map else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 "Searcher data not initialised",
             ));
-        }
+        };
 
-        let matcher = Str::new(query);
-
+        let matcher = Levenshtein::new(query, 1).unwrap();
+        let matched = map.search(&matcher).into_stream().into_str_vec().unwrap();
         let mut results: Vec<(String, u64)> = Vec::new();
-
-        let mut stream = self
-            .map
-            .as_ref()
-            .unwrap()
-            .search_with_state(&matcher)
-            .into_stream();
-
-        while let Some((k, v, _s)) = stream.next() {
-            let datstr = String::from_utf8(k.to_vec()).unwrap();
-            results.push((datstr, v));
-        }
-
+        matched.iter().for_each(|(k, v)| {
+            if re_identical.is_match(k) {
+                results.insert(0, (k.clone(), v.clone()));
+            } else if re_contains.is_match(k) {
+                results.push((k.clone(), v.clone()));
+            }
+        });
         return Ok(results);
     }
 }

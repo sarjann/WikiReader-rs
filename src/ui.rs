@@ -96,7 +96,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 text_str = text_str_opt.as_ref().unwrap().to_string();
             }
 
-            let detail = Paragraph::new(text_str);
+            let mut detail = Paragraph::new(text_str);
+            detail = detail.wrap(Wrap {trim: true});
 
             frame.render_widget(
                 detail
